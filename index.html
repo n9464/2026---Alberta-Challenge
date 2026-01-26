@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alberta 1200km Challenge</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    #runnerMarkers circle {
+      transition: cy 0.3s ease-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 p-4">
+  <!-- Login Modal -->
+  <div id="loginModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+    <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-8 border border-slate-700 max-w-md w-full" onclick="event.stopPropagation()">
+      <div class="text-center mb-6">
+        <h2 class="text-3xl font-bold text-white mb-2">Login Required</h2>
+        <p class="text-gray-400">Enter credentials to log distances</p>
+      </div>
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-gray-300 mb-2 font-semibold">Username</label>
+          <input id="usernameInput" type="text" class="w-full px-3 pr-4 py-3 bg-slate-900 border-2 border-slate-700 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter username" />
+        </div>
+        <div>
+          <label class="block text-gray-300 mb-2 font-semibold">Password</label>
+          <input id="passwordInput" type="password" class="w-full px-3 pr-4 py-3 bg-slate-900 border-2 border-slate-700 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter password" />
+        </div>
+        <div id="loginError" class="hidden bg-red-900/30 border border-red-700 text-red-400 px-4 py-3 rounded-lg text-sm"></div>
+        <div class="flex gap-2">
+          <button type="button" id="cancelLogin" class="flex-1 py-3 bg-slate-700 text-white rounded-lg font-bold hover:bg-slate-600 transition-all">Cancel</button>
+          <button type="submit" class="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-bold shadow-lg hover:from-blue-700 hover:to-purple-700 transition-all">Login</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-green-400 mb-2">Alberta 1200km Challenge 🏃‍♂️</h1>
+      <p class="text-lg text-gray-400">Lachlan • Nicolas • Samuel | March 1 - July 28, 2026</p>
+    </div>
+
+    <!-- Main grid: map + legend/cards -->
+    <div class="grid lg:grid-cols-12 gap-6 mb-6">
+      <!-- Map column (wider) -->
+      <div class="lg:col-span-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700 flex flex-col">
+        <h2 class="text-3xl font-bold mb-4 text-white">Individual Progress Through Alberta</h2>
+
+        <div class="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
+          <!-- Map -->
+          <div class="relative flex-1">
+            <svg viewBox="0 0 600 700" class="w-full h-full" style="min-height: 500px;">
+              <defs>
+                <linearGradient id="mapBg" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#1e293b" />
+                  <stop offset="50%" stop-color="#334155" />
+                  <stop offset="100%" stop-color="#475569" />
+                </linearGradient>
+                <filter id="cityGlow">
+                  <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                  <feMerge>
+                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <filter id="runnerGlow">
+                  <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+                  <feMerge>
+                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+
+              <rect width="600" height="700" fill="#0f172a" />
+
+              <defs>
+                <clipPath id="albertaClip">
+                  <polygon points="210,40 450,40 450,660 322.5,660 315,620 307.5,580 300,540 270,500 240,470 217.5,450 210,440" />
+                </clipPath>
+              </defs>
+
+              <rect x="195" y="40" width="255" height="620" fill="url(#mapBg)" stroke="#64748b" stroke-width="3" clip-path="url(#albertaClip)" />
+              <!-- Mountain border line -->
+              <polyline points="322.5,660 315,620 307.5,580 300,540 270,500 240,470 217.5,450 210,440" fill="none" stroke="#64748b" stroke-width="4" opacity="1" stroke-linecap="round" stroke-linejoin="round" />
+
+              <!-- Horizontal guide lines -->
+              <line x1="195" y1="180" x2="450" y2="180" stroke="#334155" stroke-width="1" opacity="0.3" stroke-dasharray="5,5" />
+              <line x1="195" y1="340" x2="450" y2="340" stroke="#334155" stroke-width="1" opacity="0.3" stroke-dasharray="5,5" />
+              <line x1="195" y1="500" x2="450" y2="500" stroke="#334155" stroke-width="1" opacity="0.3" stroke-dasharray="5,5" />
+
+              <!-- Cities -->
+              <g opacity="0.75">
+                <circle cx="377.85" cy="627.4" r="5" fill="#ef4444" filter="url(#cityGlow)" />
+                <circle cx="377.85" cy="627.4" r="3" fill="#fca5a5" />
+                <text x="385.85" y="632.4" font-size="12" fill="#e2e8f0" font-weight="600">Lethbridge</text>
+              </g>
+              <g opacity="0.85">
+                <circle cx="315.75" cy="563.1" r="7" fill="#f87171" filter="url(#cityGlow)" />
+                <circle cx="315.75" cy="563.1" r="5" fill="#fca5a5" />
+                <text x="325.75" y="569.1" font-size="14" fill="#f1f5f9" font-weight="700">Calgary</text>
+              </g>
+              <g opacity="0.75">
+                <circle cx="325.8" cy="505.4" r="5" fill="#fb923c" filter="url(#cityGlow)" />
+                <circle cx="325.8" cy="505.4" r="3" fill="#fdba74" />
+                <text x="333.8" y="510.4" font-size="12" fill="#e2e8f0" font-weight="600">Red Deer</text>
+              </g>
+              <g opacity="0.85">
+                <circle cx="345.0" cy="444.9" r="7" fill="#f87171" filter="url(#cityGlow)" />
+                <circle cx="345.0" cy="444.9" r="5" fill="#fca5a5" />
+                <text x="355.0" y="450.9" font-size="14" fill="#f1f5f9" font-weight="700">Edmonton</text>
+              </g>
+              <g opacity="0.75">
+                <circle cx="445.35" cy="401.9" r="5" fill="#3b82f6" filter="url(#cityGlow)" />
+                <circle cx="445.35" cy="401.9" r="3" fill="#60a5fa" />
+                <text x="379.35" y="406.9" font-size="12" fill="#e2e8f0" font-weight="600">Cold Lake</text>
+              </g>
+              <g opacity="0.75">
+                <circle cx="225.6" cy="368.3" r="5" fill="#ef4444" filter="url(#cityGlow)" />
+                <circle cx="225.6" cy="368.3" r="3" fill="#fca5a5" />
+                <text x="233.6" y="373.3" font-size="12" fill="#e2e8f0" font-weight="600">Grande Prairie</text>
+              </g>
+              <g opacity="0.75">
+                <circle cx="414.75" cy="294.6" r="5" fill="#fb923c" filter="url(#cityGlow)" />
+                <circle cx="414.75" cy="294.6" r="3" fill="#fdba74" />
+                <text x="422.75" y="299.6" font-size="12" fill="#e2e8f0" font-weight="600">Fort McMurray</text>
+              </g>
+
+              <!-- Northern boundary -->
+              <line x1="195" y1="40" x2="450" y2="40" stroke="#64748b" stroke-width="2" opacity="0.6" stroke-dasharray="3,3" />
+
+              <!-- Mountain range -->
+              <polyline points="322.5,660 315,620 307.5,580 300,540 270,500 240,470 217.5,450 210,440" fill="none" stroke="#64748b" stroke-width="4" opacity="1" stroke-linecap="round" stroke-linejoin="round" />
+
+              <!-- Mountain north boundary -->
+              <line x1="210" y1="440" x2="210" y2="40" stroke="#64748b" stroke-width="4" opacity="1" stroke-linecap="round" />
+
+              <!-- Scale -->
+              <g opacity="0.5">
+                <line x1="450" y1="660" x2="456" y2="660" stroke="#64748b" stroke-width="1" />
+                <text x="459" y="665" font-size="11" fill="#94a3b8">0 km</text>
+                <line x1="450" y1="505" x2="456" y2="505" stroke="#64748b" stroke-width="1" />
+                <text x="459" y="510" font-size="11" fill="#94a3b8">300 km</text>
+                <line x1="450" y1="350" x2="456" y2="350" stroke="#64748b" stroke-width="1" />
+                <text x="459" y="355" font-size="11" fill="#94a3b8">600 km</text>
+                <line x1="450" y1="195" x2="456" y2="195" stroke="#64748b" stroke-width="1" />
+                <text x="459" y="200" font-size="11" fill="#94a3b8">900 km</text>
+                <line x1="450" y1="40" x2="456" y2="40" stroke="#64748b" stroke-width="1" />
+                <text x="459" y="45" font-size="11" fill="#94a3b8">1200 km</text>
+              </g>
+
+              <g id="runnerMarkers"></g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar: legend + runner cards -->
+      <div class="lg:col-span-4 space-y-6">
+        <!-- Legend -->
+        <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700">
+          <h3 class="font-bold text-lg mb-4 text-white">Runner Legend</h3>
+          <div class="grid grid-cols-1 gap-3" id="runnerLegend"></div>
+        </div>
+
+        <!-- Runner cards -->
+        <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700">
+          <h3 class="font-bold text-lg mb-4 text-white">Individual Totals</h3>
+          <div class="grid grid-cols-1 gap-3" id="runnerCards"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge Info -->
+    <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700 mb-6">
+      <h2 class="text-2xl font-bold mb-4 text-white">Challenge Info</h2>
+
+      <div class="grid lg:grid-cols-3 gap-6">
+        <div class="space-y-3">
+          <div class="p-3 bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-lg border border-slate-600">
+            <div class="text-sm text-gray-400 font-medium">Goal Distance</div>
+            <div class="text-3xl font-bold text-gray-200">1200 km</div>
+          </div>
+          <div class="p-3 bg-gradient-to-br from-purple-900/30 to-purple-800/30 rounded-lg border border-purple-700/50">
+            <div class="text-sm text-gray-400 font-medium">Days Elapsed</div>
+            <div id="daysElapsed" class="text-2xl font-bold text-purple-400">0 / 150</div>
+          </div>
+          <div class="p-3 bg-gradient-to-br from-orange-900/30 to-orange-800/30 rounded-lg border border-orange-700/50">
+            <div class="text-sm text-gray-400 font-medium">Days Left</div>
+            <div id="daysLeft" class="text-2xl font-bold text-orange-400">0</div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-lg mb-3 text-gray-300">Individual Progress</h3>
+          <div class="space-y-2 mb-6" id="runnerProgress"></div>
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-lg text-gray-300">Log Runs</h3>
+            <button id="logoutBtn" class="hidden text-sm text-gray-400 hover:text-gray-300">Logout</button>
+          </div>
+          <div id="runnerInputs" class="space-y-3"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Run History -->
+    <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700">
+      <h2 class="text-2xl font-bold mb-4 text-white">Run History</h2>
+      <p id="emptyHistory" class="text-gray-500 text-center py-8">No runs logged yet. Start your journey!</p>
+      <div id="runHistory" class="hidden grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 max-h-64 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- Script (unchanged except for minor tweaks to match new SVG height) -->
+  <script>
+    // ============ FIREBASE CONFIGURATION ============
+    const firebaseConfig = {
+      apiKey: "AIzaSyCKo7wE_madVM2UmMDmdrqWhDQ10DjjtLo",
+      authDomain: "albertarun-fdb2d.firebaseapp.com",
+      projectId: "albertarun-fdb2d",
+      storageBucket: "albertarun-fdb2d.firebasestorage.app",
+      messagingSenderId: "200070753884",
+      appId: "1:200070753884:web:6efcd825c840a01ba40099",
+      measurementId: "G-M4PQ7E9M3N"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+    // =============================================
+
+    const TOTAL_DISTANCE = 1200;
+    const TOTAL_DAYS = 150;
+    const START_DATE = new Date('2026-03-01');
+    const runners = ['Lachlan', 'Nicolas', 'Samuel'];
+    const runnerColors = {
+      Lachlan: { main: '#60a5fa', dark: '#3b82f6', glow: '#3b82f6', light: 'from-blue-900/30 to-blue-800/30' },
+      Nicolas: { main: '#4ade80', dark: '#22c55e', glow: '#22c55e', light: 'from-green-900/30 to-green-800/30' },
+      Samuel: { main: '#c084fc', dark: '#a855f7', glow: '#a855f7', light: 'from-purple-900/30 to-purple-800/30' }
+    };
+
+    let isLoggedIn = false;
+    const runs = { Lachlan: [], Nicolas: [], Samuel: [] };
+
+    const getYPosition = (distance) => 660 - ((distance / TOTAL_DISTANCE) * 620); // 0km at southern border (y=660), 1200km at northern border (y=40)
+    const daysSinceStart = Math.max(0, Math.floor((Date.now() - START_DATE.getTime()) / (1000 * 60 * 60 * 24)));
+    const daysRemaining = Math.max(0, TOTAL_DAYS - daysSinceStart);
+
+    const el = (selector) => document.querySelector(selector);
+
+    const updateProgress = () => {
+      const totals = {
+        Lachlan: runs.Lachlan.reduce((sum, run) => sum + run.distance, 0),
+        Nicolas: runs.Nicolas.reduce((sum, run) => sum + run.distance, 0),
+        Samuel: runs.Samuel.reduce((sum, run) => sum + run.distance, 0)
+      };
+
+      const runnerCards = runners.map((runner) => {
+        const pct = Math.min((totals[runner] / TOTAL_DISTANCE) * 100, 100);
+        return `
+          <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg text-center border border-slate-700">
+            <div class="text-sm text-gray-400 font-medium">${runner}</div>
+            <div class="text-xl font-bold" style="color:${runnerColors[runner].main}">${totals[runner].toFixed(1)} km</div>
+            <div class="w-full bg-slate-700 rounded-full h-2 mt-2">
+              <div class="h-2 rounded-full transition-all" style="width:${pct}%;background:${runnerColors[runner].main};box-shadow:0 0 8px ${runnerColors[runner].glow}"></div>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">${pct.toFixed(1)}%</div>
+          </div>`;
+      }).join('');
+      el('#runnerCards').innerHTML = runnerCards;
+
+      const progressBlocks = runners.map((runner) => {
+        const remaining = Math.max(TOTAL_DISTANCE - totals[runner], 0);
+        const need = (remaining / Math.max(daysRemaining, 1)).toFixed(1);
+        return `
+          <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg border border-slate-700">
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center gap-2">
+                <div class="w-5 h-5 rounded-full flex items-center justify-center font-bold text-xs" style="background:${runnerColors[runner].main};color:#1e293b">${runner[0]}</div>
+                <span class="font-semibold text-gray-300">${runner}</span>
+              </div>
+              <span class="text-lg font-bold" style="color:${runnerColors[runner].main}">${totals[runner].toFixed(1)} km</span>
+            </div>
+            <div class="text-xs text-gray-500">Remaining: ${remaining.toFixed(1)} km</div>
+            <div class="text-xs text-gray-500">Need/day: ${need} km</div>
+          </div>`;
+      }).join('');
+      el('#runnerProgress').innerHTML = progressBlocks;
+
+      const markers = runners.filter((runner) => totals[runner] > 0).map((runner, idx) => {
+        const xPositions = { Lachlan: 350, Nicolas: 385, Samuel: 420 };
+        const x = xPositions[runner];
+        const y = getYPosition(totals[runner]);
+        return `
+          <g>
+            <circle cx="${x}" cy="${y}" r="14" fill="${runnerColors[runner].main}" opacity="0.25" filter="url(#runnerGlow)"></circle>
+            <circle cx="${x}" cy="${y}" r="12" fill="${runnerColors[runner].main}" stroke="#1e293b" stroke-width="2"></circle>
+            <text x="${x}" y="${y + 5}" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">${runner[0]}</text>
+          </g>`;
+      }).join('');
+      el('#runnerMarkers').innerHTML = markers;
+
+      const history = [...runs.Lachlan.map((r) => ({ ...r, runner: 'Lachlan' })), ...runs.Nicolas.map((r) => ({ ...r, runner: 'Nicolas' })), ...runs.Samuel.map((r) => ({ ...r, runner: 'Samuel' }))].sort((a, b) => b.id - a.id);
+      if (history.length === 0) {
+        el('#emptyHistory').classList.remove('hidden');
+        el('#runHistory').classList.add('hidden');
+      } else {
+        el('#emptyHistory').classList.add('hidden');
+        el('#runHistory').classList.remove('hidden');
+        el('#runHistory').innerHTML = history.map((run) => `
+          <div class="p-3 bg-gradient-to-br ${runnerColors[run.runner].light} rounded-lg border-2" style="border-color:${runnerColors[run.runner].dark}">
+            <div class="text-xs text-gray-500 font-medium">${run.date}</div>
+            <div class="font-bold text-gray-300">${run.runner}</div>
+            <div class="text-2xl font-bold" style="color:${runnerColors[run.runner].main}">${run.distance.toFixed(1)} km</div>
+          </div>`).join('');
+      }
+    };
+
+    const buildLegend = () => {
+      const legend = runners.map((runner) => `
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-full border-2 border-slate-900 shadow-lg flex items-center justify-center font-bold text-sm" style="background:${runnerColors[runner].main};box-shadow:0 0 10px ${runnerColors[runner].glow};color:#1e293b">${runner[0]}</div>
+          <span class="font-semibold text-gray-300">${runner}</span>
+        </div>`).join('');
+      el('#runnerLegend').innerHTML = legend;
+    };
+
+    const buildInputs = () => {
+      const inputs = runners.map((runner) => `
+        <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg border-2" style="border-color:${runnerColors[runner].dark}">
+          <div class="font-semibold mb-2 text-gray-300">${runner}</div>
+          <div class="flex gap-2">
+            <input type="number" step="0.1" id="distance-${runner}" placeholder="km" class="flex-1 px-3 py-2 bg-slate-900 border-2 border-slate-700 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:border-transparent placeholder-gray-500" />
+            <button data-runner="${runner}" class="addRunBtn px-4 py-2 bg-gradient-to-r text-white rounded-lg font-bold shadow-lg transition-all" style="background:linear-gradient(to right, ${runnerColors[runner].main}, ${runnerColors[runner].dark});box-shadow:0 4px 14px ${runnerColors[runner].glow}40">Login</button>
+          </div>
+        </div>`).join('');
+      el('#runnerInputs').innerHTML = inputs;
+    };
+
+    const setLoggedInUI = () => {
+      document.querySelectorAll('.addRunBtn').forEach((btn) => {
+        btn.textContent = isLoggedIn ? 'Add' : 'Login';
+        btn.classList.toggle('opacity-80', !isLoggedIn);
+      });
+      if (isLoggedIn) {
+        el('#logoutBtn').classList.remove('hidden');
+      } else {
+        el('#logoutBtn').classList.add('hidden');
+      }
+    };
+
+    const showLogin = () => {
+      el('#loginModal').classList.remove('hidden');
+      el('#loginError').classList.add('hidden');
+      el('#loginError').textContent = '';
+      el('#usernameInput').value = '';
+      el('#passwordInput').value = '';
+    };
+
+    const hideLogin = () => el('#loginModal').classList.add('hidden');
+
+    document.addEventListener('click', (e) => {
+      if (e.target.id === 'loginModal') hideLogin();
+    });
+
+    el('#loginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const user = el('#usernameInput').value.trim();
+      const pass = el('#passwordInput').value.trim();
+      if (user === 'iloverunning' && pass === 'nisala2026') {
+        isLoggedIn = true;
+        hideLogin();
+        setLoggedInUI();
+      } else {
+        el('#loginError').classList.remove('hidden');
+        el('#loginError').textContent = 'Invalid username or password';
+      }
+    });
+
+    el('#cancelLogin').addEventListener('click', hideLogin);
+    el('#logoutBtn').addEventListener('click', () => { isLoggedIn = false; setLoggedInUI(); });
+
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('addRunBtn')) {
+        const runner = e.target.getAttribute('data-runner');
+        if (!isLoggedIn) {
+          showLogin();
+          return;
+        }
+        const input = el(`#distance-${runner}`);
+        const val = parseFloat(input.value);
+        if (!val || val <= 0) return;
+        const run = { id: Date.now(), distance: val, date: new Date().toISOString().split('T')[0], runner };
+        runs[runner].push(run);
+        
+        // Save to Firestore
+        db.collection('runs').add({
+          runner: run.runner,
+          distance: run.distance,
+          date: run.date,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(error => console.error('Error saving run:', error));
+        
+        input.value = '';
+        updateProgress();
+      }
+    });
+
+    runners.forEach((runner) => {
+      const inputId = `distance-${runner}`;
+      document.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && e.target.id === inputId && isLoggedIn) {
+          e.preventDefault();
+          const val = parseFloat(e.target.value);
+          if (!val || val <= 0) return;
+          const run = { id: Date.now(), distance: val, date: new Date().toISOString().split('T')[0], runner };
+          runs[runner].push(run);
+          
+          // Save to Firestore
+          db.collection('runs').add({
+            runner: run.runner,
+            distance: run.distance,
+            date: run.date,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          }).catch(error => console.error('Error saving run:', error));
+          
+          e.target.value = '';
+          updateProgress();
+        }
+      });
+    });
+
+    el('#daysElapsed').textContent = `${daysSinceStart} / ${TOTAL_DAYS}`;
+    el('#daysLeft').textContent = `${daysRemaining}`;
+
+    // Load runs from Firestore on page load
+    const loadRunsFromFirestore = async () => {
+      try {
+        const snapshot = await db.collection('runs').orderBy('timestamp', 'desc').get();
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const run = {
+            id: doc.id,
+            distance: data.distance,
+            date: data.date,
+            runner: data.runner
+          };
+          if (runs[data.runner]) {
+            runs[data.runner].push(run);
+          }
+        });
+        updateProgress();
+      } catch (error) {
+        console.error('Error loading runs from Firestore:', error);
+        // If Firestore isn't ready, just continue with empty data
+      }
+    };
+
+    buildLegend();
+    buildInputs();
+    updateProgress();
+    setLoggedInUI();
+    
+    // Load data from Firestore
+    loadRunsFromFirestore();
+  </script>
+</body>
+</html>
