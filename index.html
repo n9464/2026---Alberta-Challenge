@@ -219,7 +219,14 @@
 
     <!-- Run History -->
     <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700">
-      <h2 class="text-2xl font-bold mb-4 text-white">Run History</h2>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-2xl font-bold text-white">Run History</h2>
+        <div class="flex gap-2">
+          <button id="sortByDate" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg font-semibold hover:bg-blue-700 transition-all">Date</button>
+          <button id="sortByRunner" class="px-3 py-1 bg-slate-700 text-gray-300 text-sm rounded-lg font-semibold hover:bg-slate-600 transition-all">Runner</button>
+          <button id="sortByDistance" class="px-3 py-1 bg-slate-700 text-gray-300 text-sm rounded-lg font-semibold hover:bg-slate-600 transition-all">Distance</button>
+        </div>
+      </div>
       <p id="emptyHistory" class="text-gray-500 text-center py-8">No runs logged yet. Start your journey!</p>
       <div id="runHistory" class="hidden grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 max-h-64 overflow-y-auto"></div>
     </div>
@@ -256,12 +263,42 @@
 
     let isLoggedIn = false;
     const runs = { Lachlan: [], Nicolas: [], Samuel: [] };
+    let currentSortOrder = 'date'; // 'date', 'runner', or 'distance'
+
+    // Helper function to get current date/time in Edmonton timezone
+    const getEdmontonDate = () => {
+      const now = new Date();
+      const edmonton = new Date(now.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
+      return edmonton;
+    };
+
+    // Helper function to format date in Edmonton timezone as YYYY-MM-DD
+    const formatEdmontonDate = (date) => {
+      const d = new Date(date.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
 
     const getYPosition = (distance) => 660 - ((distance / TOTAL_DISTANCE) * 620); // 0km at southern border (y=660), 1200km at northern border (y=40)
-    const daysSinceStart = Math.max(0, Math.floor((Date.now() - START_DATE.getTime()) / (1000 * 60 * 60 * 24)));
+    const daysSinceStart = Math.max(0, Math.floor((getEdmontonDate().getTime() - START_DATE.getTime()) / (1000 * 60 * 60 * 24)));
     const daysRemaining = Math.max(0, TOTAL_DAYS - daysSinceStart);
 
     const el = (selector) => document.querySelector(selector);
+
+    const sortHistory = (runs) => {
+      const history = [...runs.Lachlan.map((r) => ({ ...r, runner: 'Lachlan' })), ...runs.Nicolas.map((r) => ({ ...r, runner: 'Nicolas' })), ...runs.Samuel.map((r) => ({ ...r, runner: 'Samuel' }))];
+      
+      if (currentSortOrder === 'date') {
+        return history.sort((a, b) => new Date(b.date) - new Date(a.date));
+      } else if (currentSortOrder === 'runner') {
+        return history.sort((a, b) => a.runner.localeCompare(b.runner));
+      } else if (currentSortOrder === 'distance') {
+        return history.sort((a, b) => b.distance - a.distance);
+      }
+      return history;
+    };
 
     const updateProgress = () => {
       const totals = {
@@ -315,7 +352,7 @@
       }).join('');
       el('#runnerMarkers').innerHTML = markers;
 
-      const history = [...runs.Lachlan.map((r) => ({ ...r, runner: 'Lachlan' })), ...runs.Nicolas.map((r) => ({ ...r, runner: 'Nicolas' })), ...runs.Samuel.map((r) => ({ ...r, runner: 'Samuel' }))].sort((a, b) => b.id - a.id);
+      const history = sortHistory(runs);
       if (history.length === 0) {
         el('#emptyHistory').classList.remove('hidden');
         el('#runHistory').classList.add('hidden');
@@ -395,6 +432,48 @@
     el('#cancelLogin').addEventListener('click', hideLogin);
     el('#logoutBtn').addEventListener('click', () => { isLoggedIn = false; setLoggedInUI(); });
 
+    // Sort button listeners
+    const updateSortButtons = () => {
+      const buttons = ['#sortByDate', '#sortByRunner', '#sortByDistance'];
+      buttons.forEach((btn) => {
+        el(btn).classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        el(btn).classList.add('bg-slate-700', 'hover:bg-slate-600');
+        el(btn).style.color = '#d1d5db';
+      });
+      
+      if (currentSortOrder === 'date') {
+        el('#sortByDate').classList.remove('bg-slate-700', 'hover:bg-slate-600');
+        el('#sortByDate').classList.add('bg-blue-600', 'hover:bg-blue-700');
+        el('#sortByDate').style.color = 'white';
+      } else if (currentSortOrder === 'runner') {
+        el('#sortByRunner').classList.remove('bg-slate-700', 'hover:bg-slate-600');
+        el('#sortByRunner').classList.add('bg-blue-600', 'hover:bg-blue-700');
+        el('#sortByRunner').style.color = 'white';
+      } else if (currentSortOrder === 'distance') {
+        el('#sortByDistance').classList.remove('bg-slate-700', 'hover:bg-slate-600');
+        el('#sortByDistance').classList.add('bg-blue-600', 'hover:bg-blue-700');
+        el('#sortByDistance').style.color = 'white';
+      }
+    };
+
+    el('#sortByDate').addEventListener('click', () => {
+      currentSortOrder = 'date';
+      updateSortButtons();
+      updateProgress();
+    });
+
+    el('#sortByRunner').addEventListener('click', () => {
+      currentSortOrder = 'runner';
+      updateSortButtons();
+      updateProgress();
+    });
+
+    el('#sortByDistance').addEventListener('click', () => {
+      currentSortOrder = 'distance';
+      updateSortButtons();
+      updateProgress();
+    });
+
     document.addEventListener('click', (e) => {
       if (e.target.classList.contains('addRunBtn')) {
         const runner = e.target.getAttribute('data-runner');
@@ -405,7 +484,7 @@
         const input = el(`#distance-${runner}`);
         const val = parseFloat(input.value);
         if (!val || val <= 0) return;
-        const run = { id: Date.now(), distance: val, date: new Date().toISOString().split('T')[0], runner };
+        const run = { id: Date.now(), distance: val, date: formatEdmontonDate(getEdmontonDate()), runner };
         runs[runner].push(run);
         
         // Save to Firestore
@@ -428,7 +507,7 @@
           e.preventDefault();
           const val = parseFloat(e.target.value);
           if (!val || val <= 0) return;
-          const run = { id: Date.now(), distance: val, date: new Date().toISOString().split('T')[0], runner };
+          const run = { id: Date.now(), distance: val, date: formatEdmontonDate(getEdmontonDate()), runner };
           runs[runner].push(run);
           
           // Save to Firestore
