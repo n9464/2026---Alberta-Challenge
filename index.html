@@ -48,7 +48,7 @@
     <!-- Header -->
     <div class="text-center mb-8">
       <h1 class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-green-400 mb-2">Alberta 1200km Challenge 🏃‍♂️</h1>
-      <p class="text-lg text-gray-400">Lachlan • Nicolas • Samuel | March 1 - July 28, 2026</p>
+      <p class="text-lg text-gray-400">Nicolas • Samuel | March 1 - July 28, 2026</p>
     </div>
 
     <!-- Main grid: map + legend/cards -->
@@ -254,15 +254,14 @@
     const TOTAL_DISTANCE = 1200;
     const TOTAL_DAYS = 150;
     const START_DATE = new Date('2026-03-01');
-    const runners = ['Lachlan', 'Nicolas', 'Samuel'];
+    const runners = ['Nicolas', 'Samuel'];
     const runnerColors = {
-      Lachlan: { main: '#60a5fa', dark: '#3b82f6', glow: '#3b82f6', light: 'from-blue-900/30 to-blue-800/30' },
       Nicolas: { main: '#4ade80', dark: '#22c55e', glow: '#22c55e', light: 'from-green-900/30 to-green-800/30' },
       Samuel: { main: '#c084fc', dark: '#a855f7', glow: '#a855f7', light: 'from-purple-900/30 to-purple-800/30' }
     };
 
     let isLoggedIn = false;
-    const runs = { Lachlan: [], Nicolas: [], Samuel: [] };
+    const runs = { Nicolas: [], Samuel: [] };
     let currentSortOrder = 'date'; // 'date', 'runner', or 'distance'
 
     // Helper function to get current date/time in Edmonton timezone
@@ -288,7 +287,7 @@
     const el = (selector) => document.querySelector(selector);
 
     const sortHistory = (runs) => {
-      const history = [...runs.Lachlan.map((r) => ({ ...r, runner: 'Lachlan' })), ...runs.Nicolas.map((r) => ({ ...r, runner: 'Nicolas' })), ...runs.Samuel.map((r) => ({ ...r, runner: 'Samuel' }))];
+      const history = [...runs.Nicolas.map((r) => ({ ...r, runner: 'Nicolas' })), ...runs.Samuel.map((r) => ({ ...r, runner: 'Samuel' }))];
       
       if (currentSortOrder === 'date') {
         return history.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -302,7 +301,6 @@
 
     const updateProgress = () => {
       const totals = {
-        Lachlan: runs.Lachlan.reduce((sum, run) => sum + run.distance, 0),
         Nicolas: runs.Nicolas.reduce((sum, run) => sum + run.distance, 0),
         Samuel: runs.Samuel.reduce((sum, run) => sum + run.distance, 0)
       };
@@ -340,7 +338,7 @@
       el('#runnerProgress').innerHTML = progressBlocks;
 
       const markers = runners.filter((runner) => totals[runner] > 0).map((runner, idx) => {
-        const xPositions = { Lachlan: 350, Nicolas: 385, Samuel: 420 };
+        const xPositions = { Nicolas: 385, Samuel: 420 };
         const x = xPositions[runner];
         const y = getYPosition(totals[runner]);
         return `
