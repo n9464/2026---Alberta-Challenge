@@ -48,7 +48,7 @@
     <!-- Header -->
     <div class="text-center mb-8">
       <h1 class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-green-400 mb-2">Alberta 1200km Challenge 🏃‍♂️</h1>
-      <p class="text-lg text-gray-400">Nicolas • Samuel | March 1 - July 28, 2026</p>
+      <p class="text-lg text-gray-400">Nicolas • Samuel | Starting March 1, 2026</p>
     </div>
 
     <!-- Main grid: map + legend/cards -->
@@ -192,14 +192,6 @@
             <div class="text-sm text-gray-400 font-medium">Goal Distance</div>
             <div class="text-3xl font-bold text-gray-200">1200 km</div>
           </div>
-          <div class="p-3 bg-gradient-to-br from-purple-900/30 to-purple-800/30 rounded-lg border border-purple-700/50">
-            <div class="text-sm text-gray-400 font-medium">Days Elapsed</div>
-            <div id="daysElapsed" class="text-2xl font-bold text-purple-400">0 / 150</div>
-          </div>
-          <div class="p-3 bg-gradient-to-br from-orange-900/30 to-orange-800/30 rounded-lg border border-orange-700/50">
-            <div class="text-sm text-gray-400 font-medium">Days Left</div>
-            <div id="daysLeft" class="text-2xl font-bold text-orange-400">0</div>
-          </div>
         </div>
 
         <div>
@@ -252,7 +244,6 @@
     // =============================================
 
     const TOTAL_DISTANCE = 1200;
-    const TOTAL_DAYS = 150;
     const START_DATE = new Date('2026-03-01');
     const runners = ['Nicolas', 'Samuel'];
     const runnerColors = {
@@ -282,7 +273,6 @@
 
     const getYPosition = (distance) => 660 - ((distance / TOTAL_DISTANCE) * 620); // 0km at southern border (y=660), 1200km at northern border (y=40)
     const daysSinceStart = Math.max(0, Math.floor((getEdmontonDate().getTime() - START_DATE.getTime()) / (1000 * 60 * 60 * 24)));
-    const daysRemaining = Math.max(0, TOTAL_DAYS - daysSinceStart);
 
     const el = (selector) => document.querySelector(selector);
 
@@ -321,7 +311,6 @@
 
       const progressBlocks = runners.map((runner) => {
         const remaining = Math.max(TOTAL_DISTANCE - totals[runner], 0);
-        const need = (remaining / Math.max(daysRemaining, 1)).toFixed(1);
         return `
           <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg border border-slate-700">
             <div class="flex items-center justify-between mb-1">
@@ -332,7 +321,6 @@
               <span class="text-lg font-bold" style="color:${runnerColors[runner].main}">${totals[runner].toFixed(1)} km</span>
             </div>
             <div class="text-xs text-gray-500">Remaining: ${remaining.toFixed(1)} km</div>
-            <div class="text-xs text-gray-500">Need/day: ${need} km</div>
           </div>`;
       }).join('');
       el('#runnerProgress').innerHTML = progressBlocks;
@@ -521,9 +509,6 @@
         }
       });
     });
-
-    el('#daysElapsed').textContent = `${daysSinceStart} / ${TOTAL_DAYS}`;
-    el('#daysLeft').textContent = `${daysRemaining}`;
 
     // Load runs from Firestore on page load
     const loadRunsFromFirestore = async () => {
