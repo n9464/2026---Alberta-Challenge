@@ -253,6 +253,21 @@
 
     let isLoggedIn = false;
     const runs = { Nicolas: [], Samuel: [] };
+    const localRunSignatures = new Set();
+    let hasInitializedRunListener = false;
+    let hasRequestedNotificationPermission = false;
+    const inspiringMessages = [
+      'Lace up and chase your next milestone!',
+      'Your turn—one step today builds big progress tomorrow!',
+      'Keep the streak alive with a run of your own!',
+      'You are one run away from feeling amazing!',
+      'Momentum is waiting—go claim your kilometres!',
+      'Small runs become big wins—get out there!',
+      'The road is calling—answer it with a strong run!',
+      'Run now, thank yourself later!',
+      'Every kilometre counts—make this one yours!',
+      'You have got this—time to move!'
+    ];
     let currentSortOrder = 'date'; // 'date', 'runner', or 'distance'
 
     // Helper function to get current date/time in Edmonton timezone
@@ -275,6 +290,39 @@
     const daysSinceStart = Math.max(0, Math.floor((getEdmontonDate().getTime() - START_DATE.getTime()) / (1000 * 60 * 60 * 24)));
 
     const el = (selector) => document.querySelector(selector);
+    const getRunSignature = (run) => `${run.runner}|${run.distance}|${run.date}`;
+
+    const maybeRequestNotificationPermission = () => {
+      if (!('Notification' in window) || hasRequestedNotificationPermission) return;
+      hasRequestedNotificationPermission = true;
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().catch((error) => console.error('Error requesting notification permission:', error));
+      }
+    };
+
+    const getInspiringMessage = () => inspiringMessages[Math.floor(Math.random() * inspiringMessages.length)];
+
+    const notifyNewRun = (run) => {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const distanceText = Number(run.distance).toFixed(1).replace(/\.0$/, '');
+      const body = `${run.runner} just ran ${distanceText}km. ${getInspiringMessage()}`;
+      new Notification('Alberta 1200km Challenge', { body });
+    };
+
+    const saveRunToFirestore = (runner, value) => {
+      const distance = parseFloat(value);
+      if (!distance || distance <= 0) return false;
+
+      const run = { distance, date: formatEdmontonDate(getEdmontonDate()), runner };
+      localRunSignatures.add(getRunSignature(run));
+      db.collection('runs').add({
+        runner: run.runner,
+        distance: run.distance,
+        date: run.date,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch((error) => console.error('Error saving run:', error));
+      return true;
+    };
 
     const sortHistory = (runs) => {
       const history = [...runs.Nicolas.map((r) => ({ ...r, runner: 'Nicolas' })), ...runs.Samuel.map((r) => ({ ...r, runner: 'Samuel' }))];
@@ -409,6 +457,7 @@
         isLoggedIn = true;
         hideLogin();
         setLoggedInUI();
+        maybeRequestNotificationPermission();
       } else {
         el('#loginError').classList.remove('hidden');
         el('#loginError').textContent = 'Invalid username or password';
@@ -468,21 +517,9 @@
           return;
         }
         const input = el(`#distance-${runner}`);
-        const val = parseFloat(input.value);
-        if (!val || val <= 0) return;
-        const run = { id: Date.now(), distance: val, date: formatEdmontonDate(getEdmontonDate()), runner };
-        runs[runner].push(run);
-        
-        // Save to Firestore
-        db.collection('runs').add({
-          runner: run.runner,
-          distance: run.distance,
-          date: run.date,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        }).catch(error => console.error('Error saving run:', error));
-        
+        const didSave = saveRunToFirestore(runner, input.value);
+        if (!didSave) return;
         input.value = '';
-        updateProgress();
       }
     });
 
@@ -491,29 +528,19 @@
       document.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && e.target.id === inputId && isLoggedIn) {
           e.preventDefault();
-          const val = parseFloat(e.target.value);
-          if (!val || val <= 0) return;
-          const run = { id: Date.now(), distance: val, date: formatEdmontonDate(getEdmontonDate()), runner };
-          runs[runner].push(run);
-          
-          // Save to Firestore
-          db.collection('runs').add({
-            runner: run.runner,
-            distance: run.distance,
-            date: run.date,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-          }).catch(error => console.error('Error saving run:', error));
-          
+          const didSave = saveRunToFirestore(runner, e.target.value);
+          if (!didSave) return;
           e.target.value = '';
-          updateProgress();
         }
       });
     });
 
-    // Load runs from Firestore on page load
-    const loadRunsFromFirestore = async () => {
-      try {
-        const snapshot = await db.collection('runs').orderBy('timestamp', 'desc').get();
+    // Subscribe to Firestore runs and notify on new remote runs
+    const subscribeToRuns = () => {
+      db.collection('runs').orderBy('timestamp', 'desc').onSnapshot((snapshot) => {
+        runs.Nicolas = [];
+        runs.Samuel = [];
+
         snapshot.forEach((doc) => {
           const data = doc.data();
           const run = {
@@ -526,20 +553,42 @@
             runs[data.runner].push(run);
           }
         });
+
+        if (hasInitializedRunListener) {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type !== 'added' || change.doc.metadata.hasPendingWrites) return;
+            const data = change.doc.data();
+            if (!runs[data.runner]) return;
+            const run = {
+              id: change.doc.id,
+              distance: data.distance,
+              date: data.date,
+              runner: data.runner
+            };
+            const signature = getRunSignature(run);
+            if (localRunSignatures.has(signature)) {
+              localRunSignatures.delete(signature);
+              return;
+            }
+            notifyNewRun(run);
+          });
+        }
+
+        hasInitializedRunListener = true;
         updateProgress();
-      } catch (error) {
+      }, (error) => {
         console.error('Error loading runs from Firestore:', error);
-        // If Firestore isn't ready, just continue with empty data
-      }
+      });
     };
 
     buildLegend();
     buildInputs();
     updateProgress();
     setLoggedInUI();
+    maybeRequestNotificationPermission();
     
     // Load data from Firestore
-    loadRunsFromFirestore();
+    subscribeToRuns();
   </script>
 </body>
 </html>
