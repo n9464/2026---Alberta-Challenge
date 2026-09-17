@@ -195,7 +195,11 @@
         </div>
 
         <div>
-          <h3 class="font-bold text-lg mb-3 text-gray-300">Individual Progress</h3>
+          <div class="flex items-center justify-between mb-3 gap-2">
+            <h3 class="font-bold text-lg text-gray-300">Individual Progress</h3>
+            <button id="playTimelineBtn" class="px-3 py-1 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed">Play Timeline</button>
+          </div>
+          <div id="animationStatus" class="text-xs text-gray-500 mb-2">Live view</div>
           <div class="space-y-2 mb-6" id="runnerProgress"></div>
         </div>
 
@@ -259,6 +263,8 @@
     const localRunSignatures = new Set();
     let hasInitializedRunListener = false;
     let hasRequestedNotificationPermission = false;
+    let isAnimatingTimeline = false;
+    let activeAnimationFrameId = null;
     const inspiringMessages = [
       'Lace up and chase your next milestone!',
       'Your turn—one step today builds big progress tomorrow!',
@@ -294,6 +300,126 @@
 
     const el = (selector) => document.querySelector(selector);
     const getRunSignature = (run) => `${run.runner}|${run.distance}|${run.date}`;
+    const xPositions = { Nicolas: 385, Samuel: 420 };
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const easeInOut = (t) => t * t * (3 - 2 * t);
+
+    const getTotals = () => ({
+      Nicolas: runs.Nicolas.reduce((sum, run) => sum + run.distance, 0),
+      Samuel: runs.Samuel.reduce((sum, run) => sum + run.distance, 0)
+    });
+
+    const buildDailyTimeline = () => {
+      const allRuns = [...runs.Nicolas.map((run) => ({ ...run, runner: 'Nicolas' })), ...runs.Samuel.map((run) => ({ ...run, runner: 'Samuel' }))];
+      if (allRuns.length === 0) return [];
+
+      allRuns.sort((a, b) => new Date(a.date) - new Date(b.date));
+      const dailyTotals = new Map();
+
+      allRuns.forEach((run) => {
+        if (!dailyTotals.has(run.date)) {
+          dailyTotals.set(run.date, { Nicolas: 0, Samuel: 0 });
+        }
+        dailyTotals.get(run.date)[run.runner] += run.distance;
+      });
+
+      const cumulative = { Nicolas: 0, Samuel: 0 };
+      return [...dailyTotals.keys()].sort((a, b) => new Date(a) - new Date(b)).map((date) => {
+        const dayTotals = dailyTotals.get(date);
+        cumulative.Nicolas += dayTotals.Nicolas;
+        cumulative.Samuel += dayTotals.Samuel;
+        return {
+          date,
+          totals: { ...cumulative }
+        };
+      });
+    };
+
+    const updateAnimationStatus = (text) => {
+      const statusEl = el('#animationStatus');
+      if (statusEl) statusEl.textContent = text;
+    };
+
+    const renderRunnerMarkers = (totals) => {
+      const markers = runners.filter((runner) => totals[runner] > 0).map((runner) => {
+        const x = xPositions[runner];
+        const y = getYPosition(totals[runner]);
+        return `
+          <g>
+            <circle cx="${x}" cy="${y}" r="14" fill="${runnerColors[runner].main}" opacity="0.25" filter="url(#runnerGlow)"></circle>
+            <circle cx="${x}" cy="${y}" r="12" fill="${runnerColors[runner].main}" stroke="#1e293b" stroke-width="2"></circle>
+            <text x="${x}" y="${y + 5}" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">${runner[0]}</text>
+          </g>`;
+      }).join('');
+      el('#runnerMarkers').innerHTML = markers;
+    };
+
+    const updateTimelineButtonState = () => {
+      const button = el('#playTimelineBtn');
+      if (!button) return;
+      const hasTimelineData = buildDailyTimeline().length > 0;
+      button.disabled = !hasTimelineData || isAnimatingTimeline;
+      button.textContent = isAnimatingTimeline ? 'Playing...' : 'Play Timeline';
+    };
+
+    const stopTimelineAnimation = () => {
+      if (activeAnimationFrameId !== null) {
+        cancelAnimationFrame(activeAnimationFrameId);
+        activeAnimationFrameId = null;
+      }
+      isAnimatingTimeline = false;
+      updateAnimationStatus('Live view');
+      renderRunnerMarkers(getTotals());
+      updateTimelineButtonState();
+    };
+
+    const playTimelineAnimation = () => {
+      const timeline = buildDailyTimeline();
+      if (timeline.length === 0 || isAnimatingTimeline) return;
+
+      isAnimatingTimeline = true;
+      updateTimelineButtonState();
+
+      const segmentDurationMs = 900;
+      const startTotals = { Nicolas: 0, Samuel: 0 };
+
+      const animateSegment = (segmentIndex) => {
+        if (segmentIndex >= timeline.length) {
+          stopTimelineAnimation();
+          return;
+        }
+
+        const from = segmentIndex === 0 ? startTotals : timeline[segmentIndex - 1].totals;
+        const to = timeline[segmentIndex].totals;
+        const segmentStart = performance.now();
+        const dayText = timeline[segmentIndex].date;
+
+        const step = (now) => {
+          if (!isAnimatingTimeline) return;
+          const rawProgress = clamp((now - segmentStart) / segmentDurationMs, 0, 1);
+          const easedProgress = easeInOut(rawProgress);
+
+          const interpolatedTotals = {
+            Nicolas: from.Nicolas + ((to.Nicolas - from.Nicolas) * easedProgress),
+            Samuel: from.Samuel + ((to.Samuel - from.Samuel) * easedProgress)
+          };
+
+          renderRunnerMarkers(interpolatedTotals);
+          updateAnimationStatus(`Day: ${dayText}`);
+
+          if (rawProgress < 1) {
+            activeAnimationFrameId = requestAnimationFrame(step);
+            return;
+          }
+
+          animateSegment(segmentIndex + 1);
+        };
+
+        activeAnimationFrameId = requestAnimationFrame(step);
+      };
+
+      animateSegment(0);
+    };
 
     const maybeRequestNotificationPermission = () => {
       if (!('Notification' in window) || hasRequestedNotificationPermission) return;
@@ -346,10 +472,7 @@
     };
 
     const updateProgress = () => {
-      const totals = {
-        Nicolas: runs.Nicolas.reduce((sum, run) => sum + run.distance, 0),
-        Samuel: runs.Samuel.reduce((sum, run) => sum + run.distance, 0)
-      };
+      const totals = getTotals();
 
       const runnerCards = runners.map((runner) => {
         const pct = Math.min((totals[runner] / TOTAL_DISTANCE) * 100, 100);
@@ -381,18 +504,9 @@
       }).join('');
       el('#runnerProgress').innerHTML = progressBlocks;
 
-      const markers = runners.filter((runner) => totals[runner] > 0).map((runner, idx) => {
-        const xPositions = { Nicolas: 385, Samuel: 420 };
-        const x = xPositions[runner];
-        const y = getYPosition(totals[runner]);
-        return `
-          <g>
-            <circle cx="${x}" cy="${y}" r="14" fill="${runnerColors[runner].main}" opacity="0.25" filter="url(#runnerGlow)"></circle>
-            <circle cx="${x}" cy="${y}" r="12" fill="${runnerColors[runner].main}" stroke="#1e293b" stroke-width="2"></circle>
-            <text x="${x}" y="${y + 5}" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">${runner[0]}</text>
-          </g>`;
-      }).join('');
-      el('#runnerMarkers').innerHTML = markers;
+      if (!isAnimatingTimeline) {
+        renderRunnerMarkers(totals);
+      }
 
       const history = sortHistory(runs);
       if (history.length === 0) {
@@ -408,6 +522,8 @@
             <div class="text-2xl font-bold" style="color:${runnerColors[run.runner].main}">${run.distance.toFixed(1)} km</div>
           </div>`).join('');
       }
+
+      updateTimelineButtonState();
     };
 
     const buildLegend = () => {
@@ -488,6 +604,7 @@
           .catch((error) => console.error('Error requesting notification permission:', error));
       }
     });
+    el('#playTimelineBtn').addEventListener('click', playTimelineAnimation);
 
     // Sort button listeners
     const updateSortButtons = () => {
