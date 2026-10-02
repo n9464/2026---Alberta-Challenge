@@ -16,6 +16,9 @@
     #runnerMarkers circle {
       transition: cy 0.3s ease-out;
     }
+    @media (prefers-reduced-motion: reduce) {
+      #runnerMarkers circle { transition: none; }
+    }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 p-4">
@@ -51,16 +54,39 @@
       <p class="text-lg text-gray-400">Nicolas • Samuel | Starting March 1, 2026</p>
     </div>
 
+    <!-- Shared winter race: activation is saved once; view buttons are local. -->
+    <section class="bg-gradient-to-br from-sky-950 to-slate-900 rounded-xl p-6 border border-sky-800 mb-6" aria-labelledby="winterTitle">
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div class="flex-1 min-w-0">
+          <h2 id="winterTitle" class="text-2xl font-bold text-sky-100 mb-2">Winter Evacuation ❄️</h2>
+          <p id="winterDescription" class="text-slate-300">Declare a fictional blizzard and move the finish to Lethbridge. First runner home wins. Your current kilometres become your return route.</p>
+        </div>
+        <button id="activateWinterBtn" disabled class="px-4 py-3 bg-sky-600 text-white rounded-lg font-bold hover:bg-sky-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">Loading race…</button>
+      </div>
+      <div id="winterAnnouncement" class="hidden mt-4 p-4 bg-sky-900/40 rounded-lg text-sky-100">
+        <p class="font-bold">❄️ Northern finish closed. All runners report to Lethbridge.</p>
+        <p class="mt-1 text-sky-200">Congratulations, Samuel. Your lead has been reclassified as distance from safety.</p>
+      </div>
+      <div id="raceViewControls" class="hidden flex gap-2 flex-wrap mt-4" role="group" aria-label="Race view">
+        <button id="winterViewBtn" aria-pressed="false" class="px-4 py-2 rounded-lg bg-slate-700 text-white font-semibold">Evacuation race</button>
+        <button id="originalViewBtn" aria-pressed="true" class="px-4 py-2 rounded-lg bg-sky-600 text-white font-semibold">Original race</button>
+      </div>
+      <p id="winterStatus" class="mt-3 text-sky-200" aria-live="polite"></p>
+      <p id="winterError" class="hidden mt-3 text-red-300" role="alert"></p>
+    </section>
+
     <!-- Main grid: map + legend/cards -->
     <div class="grid lg:grid-cols-12 gap-6 mb-6">
       <!-- Map column (wider) -->
       <div class="lg:col-span-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700 flex flex-col">
-        <h2 class="text-3xl font-bold mb-4 text-white">Individual Progress Through Alberta</h2>
+        <h2 id="mapTitle" class="text-3xl font-bold mb-4 text-white">Individual Progress Through Alberta</h2>
 
         <div class="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
           <!-- Map -->
           <div class="relative flex-1">
-            <svg viewBox="0 0 600 700" class="w-full h-full" style="min-height: 500px;">
+            <svg viewBox="0 0 600 700" class="w-full h-full" style="min-height: 500px;" role="img" aria-labelledby="courseTitle courseDescription">
+              <title id="courseTitle">Alberta running course</title>
+              <desc id="courseDescription">Runners travel north from Lethbridge toward the 1200 kilometre finish.</desc>
               <defs>
                 <linearGradient id="mapBg" x1="0%" y1="0%" x2="0%" y2="100%">
                   <stop offset="0%" stop-color="#1e293b" />
@@ -160,6 +186,10 @@
                 <text x="459" y="45" font-size="11" fill="#94a3b8">1200 km</text>
               </g>
 
+              <g id="winterFinish" class="hidden">
+                <line x1="354" y1="660" x2="450" y2="660" stroke="#7dd3fc" stroke-width="4" />
+                <text x="350" y="685" font-size="14" font-weight="600" fill="#bae6fd" text-anchor="middle">❄ Finish: Lethbridge</text>
+              </g>
               <g id="runnerMarkers"></g>
             </svg>
           </div>
@@ -176,7 +206,7 @@
 
         <!-- Runner cards -->
         <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700">
-          <h3 class="font-bold text-lg mb-4 text-white">Individual Totals</h3>
+          <h3 id="totalsTitle" class="font-bold text-lg mb-4 text-white">Individual Totals</h3>
           <div class="grid grid-cols-1 gap-3" id="runnerCards"></div>
         </div>
       </div>
@@ -189,14 +219,14 @@
       <div class="grid lg:grid-cols-3 gap-6">
         <div class="space-y-3">
           <div class="p-3 bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-lg border border-slate-600">
-            <div class="text-sm text-gray-400 font-medium">Goal Distance</div>
-            <div class="text-3xl font-bold text-gray-200">1200 km</div>
+            <div id="goalLabel" class="text-sm text-gray-400 font-medium">Goal Distance</div>
+            <div id="goalValue" class="text-3xl font-bold text-gray-200">1200 km</div>
           </div>
         </div>
 
         <div>
           <div class="flex items-center justify-between mb-3 gap-2">
-            <h3 class="font-bold text-lg text-gray-300">Individual Progress</h3>
+            <h3 id="progressTitle" class="font-bold text-lg text-gray-300">Individual Progress</h3>
             <button id="playTimelineBtn" class="px-3 py-1 bg-indigo-600 text-white text-sm rounded-lg font-semibold hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed">Play Timeline</button>
           </div>
           <div id="animationStatus" class="text-xs text-gray-500 mb-2">Live view</div>
@@ -231,7 +261,7 @@
     </div>
   </div>
 
-  <!-- Script (unchanged except for minor tweaks to match new SVG height) -->
+  <script src="./winter-evacuation.js"></script>
   <script>
     // ============ FIREBASE CONFIGURATION ============
     const firebaseConfig = {
@@ -265,6 +295,10 @@
     let hasRequestedNotificationPermission = false;
     let isAnimatingTimeline = false;
     let activeAnimationFrameId = null;
+    let evacuation = null;
+    let raceView = 'original';
+    let hasLoadedRuns = false;
+    let isActivatingWinter = false;
     const inspiringMessages = [
       'Lace up and chase your next milestone!',
       'Your turn—one step today builds big progress tomorrow!',
@@ -295,7 +329,7 @@
       return `${year}-${month}-${day}`;
     };
 
-    const getYPosition = (distance) => 660 - ((distance / TOTAL_DISTANCE) * 620); // 0km at southern border (y=660), 1200km at northern border (y=40)
+    const getYPosition = (distance) => 660 - ((Math.min(Math.max(distance, 0), TOTAL_DISTANCE) / TOTAL_DISTANCE) * 620);
     const daysSinceStart = Math.max(0, Math.floor((getEdmontonDate().getTime() - START_DATE.getTime()) / (1000 * 60 * 60 * 24)));
 
     const el = (selector) => document.querySelector(selector);
@@ -309,8 +343,100 @@
       Samuel: runs.Samuel.reduce((sum, run) => sum + run.distance, 0)
     });
 
+    const isWinterView = () => raceView === 'winter' && evacuation !== null;
+    const getRacePositions = () => {
+      if (!isWinterView()) return getTotals();
+      const { profiles } = WinterEvacuation.getProgress(runs, evacuation);
+      return Object.fromEntries(runners.map((runner) => [runner, profiles[runner].remaining]));
+    };
+
+    const updateWinterUI = () => {
+      const winter = isWinterView();
+      const button = el('#activateWinterBtn');
+      button.classList.toggle('hidden', evacuation !== null);
+      button.disabled = !hasLoadedRuns || isActivatingWinter;
+      button.textContent = isActivatingWinter ? 'Declaring winter…' : !hasLoadedRuns ? 'Loading race…' : isLoggedIn ? 'Declare winter ❄️' : 'Login to declare winter';
+      el('#raceViewControls').classList.toggle('hidden', evacuation === null);
+      el('#winterAnnouncement').classList.toggle('hidden', !winter);
+      el('#winterFinish').classList.toggle('hidden', !winter);
+      el('#winterDescription').textContent = evacuation
+        ? 'The return routes are fixed. New runs count toward home; switch views to follow either race.'
+        : 'Declare a fictional blizzard and move the finish to Lethbridge. First runner home wins. Your current kilometres become your return route.';
+      el('#mapTitle').textContent = winter ? 'Race Back to Lethbridge' : 'Individual Progress Through Alberta';
+      el('#totalsTitle').textContent = winter ? 'Journey Home' : 'Individual Totals';
+      el('#goalLabel').textContent = winter ? 'Evacuation Finish' : 'Goal Distance';
+      el('#goalValue').textContent = winter ? 'Lethbridge' : '1200 km';
+      el('#progressTitle').textContent = winter ? 'Distance to Home' : 'Individual Progress';
+      el('#courseDescription').textContent = winter
+        ? 'New runs move runners south toward the finish at Lethbridge. Markers show distance remaining to get home.'
+        : 'Runners travel north from Lethbridge toward the 1200 kilometre finish.';
+      [['#winterViewBtn', winter], ['#originalViewBtn', !winter]].forEach(([selector, selected]) => {
+        const viewButton = el(selector);
+        viewButton.setAttribute('aria-pressed', String(selected));
+        viewButton.classList.toggle('bg-sky-600', selected);
+        viewButton.classList.toggle('bg-slate-700', !selected);
+      });
+      if (!evacuation) {
+        el('#winterStatus').textContent = '';
+        return;
+      }
+      const { profiles, winners } = WinterEvacuation.getProgress(runs, evacuation);
+      const awaitingConfirmation = runners.filter((runner) => profiles[runner].remaining === 0 && profiles[runner].finishedAt === null);
+      el('#winterStatus').textContent = winners.length === 2 ? 'Nicolas and Samuel reached home together!'
+        : winners.length === 1 ? `${winners[0]} made it home first! 🏠`
+        : awaitingConfirmation.length ? `${awaitingConfirmation.join(' and ')} reached home — confirming arrival…`
+        : `Return routes: Nicolas ${evacuation.startingTotals.Nicolas.toFixed(1)} km • Samuel ${evacuation.startingTotals.Samuel.toFixed(1)} km`;
+    };
+
+    const activateWinter = async () => {
+      if (!isLoggedIn) { showLogin(); return; }
+      if (isActivatingWinter || evacuation || !hasLoadedRuns) return;
+      isActivatingWinter = true;
+      el('#winterError').classList.add('hidden');
+      updateWinterUI();
+      try {
+        // A server snapshot fixes membership even for same-day or duplicate-distance runs.
+        const snapshot = await db.collection('runs').orderBy('timestamp', 'desc').get({ source: 'server' });
+        const records = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+        const reference = db.collection('runs').doc(WinterEvacuation.DOCUMENT_ID);
+        const saved = await db.runTransaction(async (transaction) => {
+          const existing = await transaction.get(reference);
+          if (existing.exists) {
+            const state = WinterEvacuation.parseState(existing.data());
+            if (!state) throw new Error('The saved winter race could not be loaded.');
+            return state;
+          }
+          const state = WinterEvacuation.createStartState(records);
+          const data = { ...state, timestamp: firebase.firestore.FieldValue.serverTimestamp() };
+          transaction.set(reference, data);
+          return state;
+        });
+        evacuation = saved;
+        raceView = 'winter';
+        if (isAnimatingTimeline) stopTimelineAnimation();
+        updateProgress();
+      } catch (error) {
+        console.error('Error activating winter evacuation:', error);
+        el('#winterError').textContent = error.message === 'Both runners need a logged run before winter starts.'
+          ? error.message : 'Winter could not be declared. Check your connection and try again.';
+        el('#winterError').classList.remove('hidden');
+      } finally {
+        isActivatingWinter = false;
+        updateWinterUI();
+      }
+    };
+
+    const setRaceView = (view) => {
+      if (view === 'winter' && !evacuation) return;
+      raceView = view;
+      if (isAnimatingTimeline) stopTimelineAnimation();
+      updateProgress();
+    };
+
     const buildDailyTimeline = () => {
-      const allRuns = [...runs.Nicolas.map((run) => ({ ...run, runner: 'Nicolas' })), ...runs.Samuel.map((run) => ({ ...run, runner: 'Samuel' }))];
+      const winter = isWinterView();
+      const allRuns = winter ? WinterEvacuation.getReturnRuns(runs, evacuation)
+        : [...runs.Nicolas.map((run) => ({ ...run, runner: 'Nicolas' })), ...runs.Samuel.map((run) => ({ ...run, runner: 'Samuel' }))];
       if (allRuns.length === 0) return [];
 
       allRuns.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -330,7 +456,7 @@
         cumulative.Samuel += dayTotals.Samuel;
         return {
           date,
-          totals: { ...cumulative }
+          totals: winter ? Object.fromEntries(runners.map((runner) => [runner, Math.max(evacuation.startingTotals[runner] - cumulative[runner], 0)])) : { ...cumulative }
         };
       });
     };
@@ -341,7 +467,7 @@
     };
 
     const renderRunnerMarkers = (totals) => {
-      const markers = runners.filter((runner) => totals[runner] > 0).map((runner) => {
+      const markers = runners.filter((runner) => isWinterView() || totals[runner] > 0).map((runner) => {
         const x = xPositions[runner];
         const y = getYPosition(totals[runner]);
         return `
@@ -369,7 +495,7 @@
       }
       isAnimatingTimeline = false;
       updateAnimationStatus('Live view');
-      renderRunnerMarkers(getTotals());
+      renderRunnerMarkers(getRacePositions());
       updateTimelineButtonState();
     };
 
@@ -381,7 +507,7 @@
       updateTimelineButtonState();
 
       const segmentDurationMs = 900;
-      const startTotals = { Nicolas: 0, Samuel: 0 };
+      const startTotals = isWinterView() ? { ...evacuation.startingTotals } : { Nicolas: 0, Samuel: 0 };
 
       const animateSegment = (segmentIndex) => {
         if (segmentIndex >= timeline.length) {
@@ -445,7 +571,7 @@
 
     const saveRunToFirestore = (runner, value) => {
       const distance = parseFloat(value);
-      if (!distance || distance <= 0) return false;
+      if (!Number.isFinite(distance) || distance <= 0) return false;
 
       const run = { distance, date: formatEdmontonDate(getEdmontonDate()), runner };
       localRunSignatures.add(getRunSignature(run));
@@ -473,23 +599,29 @@
 
     const updateProgress = () => {
       const totals = getTotals();
+      const winter = isWinterView();
+      const winterProgress = winter ? WinterEvacuation.getProgress(runs, evacuation).profiles : null;
+      updateWinterUI();
 
       const runnerCards = runners.map((runner) => {
-        const pct = Math.min((totals[runner] / TOTAL_DISTANCE) * 100, 100);
+        const pct = winter ? winterProgress[runner].percent : Math.min((totals[runner] / TOTAL_DISTANCE) * 100, 100);
+        const distance = winter ? winterProgress[runner].distance : totals[runner];
         return `
           <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg text-center border border-slate-700">
             <div class="text-sm text-gray-400 font-medium">${runner}</div>
-            <div class="text-xl font-bold" style="color:${runnerColors[runner].main}">${totals[runner].toFixed(1)} km</div>
+            <div class="text-xl font-bold" style="color:${runnerColors[runner].main}">${distance.toFixed(1)} km${winter ? ' toward home' : ''}</div>
             <div class="w-full bg-slate-700 rounded-full h-2 mt-2">
               <div class="h-2 rounded-full transition-all" style="width:${pct}%;background:${runnerColors[runner].main};box-shadow:0 0 8px ${runnerColors[runner].glow}"></div>
             </div>
             <div class="text-xs text-gray-500 mt-1">${pct.toFixed(1)}%</div>
+            ${winter ? `<div class="text-sm text-slate-300 mt-2">Return route: ${winterProgress[runner].target.toFixed(1)} km · All runs: ${totals[runner].toFixed(1)} km</div>` : ''}
           </div>`;
       }).join('');
       el('#runnerCards').innerHTML = runnerCards;
 
       const progressBlocks = runners.map((runner) => {
-        const remaining = Math.max(TOTAL_DISTANCE - totals[runner], 0);
+        const remaining = winter ? winterProgress[runner].remaining : Math.max(TOTAL_DISTANCE - totals[runner], 0);
+        const distance = winter ? remaining : totals[runner];
         return `
           <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg border border-slate-700">
             <div class="flex items-center justify-between mb-1">
@@ -497,15 +629,15 @@
                 <div class="w-5 h-5 rounded-full flex items-center justify-center font-bold text-xs" style="background:${runnerColors[runner].main};color:#1e293b">${runner[0]}</div>
                 <span class="font-semibold text-gray-300">${runner}</span>
               </div>
-              <span class="text-lg font-bold" style="color:${runnerColors[runner].main}">${totals[runner].toFixed(1)} km</span>
+              <span class="text-lg font-bold" style="color:${runnerColors[runner].main}">${winter && remaining === 0 ? 'Home! 🏠' : `${distance.toFixed(1)} km`}</span>
             </div>
-            <div class="text-xs text-gray-500">Remaining: ${remaining.toFixed(1)} km</div>
+            <div class="text-sm text-slate-300">${winter ? 'To get home' : 'Remaining'}: ${remaining.toFixed(1)} km</div>
           </div>`;
       }).join('');
       el('#runnerProgress').innerHTML = progressBlocks;
 
       if (!isAnimatingTimeline) {
-        renderRunnerMarkers(totals);
+        renderRunnerMarkers(getRacePositions());
       }
 
       const history = sortHistory(runs);
@@ -557,6 +689,7 @@
       } else {
         el('#logoutBtn').classList.add('hidden');
       }
+      updateWinterUI();
     };
 
     const showLogin = () => {
@@ -605,6 +738,9 @@
       }
     });
     el('#playTimelineBtn').addEventListener('click', playTimelineAnimation);
+    el('#activateWinterBtn').addEventListener('click', activateWinter);
+    el('#winterViewBtn').addEventListener('click', () => setRaceView('winter'));
+    el('#originalViewBtn').addEventListener('click', () => setRaceView('original'));
 
     // Sort button listeners
     const updateSortButtons = () => {
@@ -676,22 +812,39 @@
 
     // Subscribe to Firestore runs and notify on new remote runs
     const subscribeToRuns = () => {
-      db.collection('runs').orderBy('timestamp', 'desc').onSnapshot((snapshot) => {
+      db.collection('runs').orderBy('timestamp', 'desc').onSnapshot({ includeMetadataChanges: true }, (snapshot) => {
         runs.Nicolas = [];
         runs.Samuel = [];
+        let savedEvacuation = null;
 
         snapshot.forEach((doc) => {
           const data = doc.data();
+          if (doc.id === WinterEvacuation.DOCUMENT_ID) {
+            savedEvacuation = WinterEvacuation.parseState(data);
+            return;
+          }
           const run = {
             id: doc.id,
             distance: data.distance,
             date: data.date,
-            runner: data.runner
+            runner: data.runner,
+            timestamp: data.timestamp,
+            pending: doc.metadata.hasPendingWrites
           };
-          if (runs[data.runner]) {
+          if (runs[data.runner] && typeof run.distance === 'number' && Number.isFinite(run.distance) && run.distance >= 0) {
             runs[data.runner].push(run);
           }
         });
+
+        if (savedEvacuation) {
+          const firstActivation = evacuation === null;
+          evacuation = savedEvacuation;
+          if (firstActivation) {
+            raceView = 'winter';
+            if (isAnimatingTimeline) stopTimelineAnimation();
+          }
+        }
+        hasLoadedRuns = !snapshot.metadata.fromCache;
 
         if (hasInitializedRunListener) {
           snapshot.docChanges().forEach((change) => {
@@ -717,6 +870,8 @@
         updateProgress();
       }, (error) => {
         console.error('Error loading runs from Firestore:', error);
+        hasLoadedRuns = false;
+        updateWinterUI();
       });
     };
 
