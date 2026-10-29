@@ -56,6 +56,7 @@
       <!-- Map column (wider) -->
       <div class="lg:col-span-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700 flex flex-col">
         <h2 class="text-3xl font-bold mb-4 text-white">Individual Progress Through Alberta</h2>
+        <p class="text-sm text-gray-400 mb-4">Northbound through October 28, 2026 • Toward Cold Lake from October 29, 2026</p>
 
         <div class="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
           <!-- Map -->
@@ -176,7 +177,8 @@
 
         <!-- Runner cards -->
         <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700">
-          <h3 class="font-bold text-lg mb-4 text-white">Distance Remaining</h3>
+          <h3 class="font-bold text-lg mb-2 text-white">Distance to Cold Lake</h3>
+          <p class="text-xs text-gray-400 mb-4">Estimated from the map’s 1200 km north–south scale.</p>
           <div class="grid grid-cols-1 gap-3" id="runnerCards"></div>
         </div>
       </div>
@@ -189,8 +191,9 @@
       <div class="grid lg:grid-cols-3 gap-6">
         <div class="space-y-3">
           <div class="p-3 bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-lg border border-slate-600">
-            <div class="text-sm text-gray-400 font-medium">Goal Distance</div>
-            <div class="text-3xl font-bold text-gray-200">1200 km</div>
+            <div class="text-sm text-gray-400 font-medium">Current Destination</div>
+            <div class="text-3xl font-bold text-gray-200">Cold Lake</div>
+            <p class="text-sm text-gray-400 mt-2">Runs before October 29 set each runner’s northbound position. Runs from October 29 onward bring them toward Cold Lake.</p>
           </div>
         </div>
 
@@ -231,7 +234,7 @@
     </div>
   </div>
 
-  <!-- Script (unchanged except for minor tweaks to match new SVG height) -->
+  <!-- Challenge progress and run logging -->
   <script>
     // ============ FIREBASE CONFIGURATION ============
     const firebaseConfig = {
@@ -251,7 +254,8 @@
     // =============================================
 
     const TOTAL_DISTANCE = 1200;
-    const START_DATE = new Date('2026-03-01');
+    // Fixed Edmonton calendar date: historical runs keep their northbound progress.
+    const COLD_LAKE_START_DATE = '2026-10-29';
     const runners = ['Nicolas', 'Samuel'];
     const runnerColors = {
       Nicolas: { main: '#4ade80', dark: '#22c55e', glow: '#22c55e', light: 'from-green-900/30 to-green-800/30' },
@@ -279,47 +283,66 @@
     ];
     let currentSortOrder = 'date'; // 'date', 'runner', or 'distance'
 
-    // Helper function to get current date/time in Edmonton timezone
-    const getEdmontonDate = () => {
-      const now = new Date();
-      const edmonton = new Date(now.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
-      return edmonton;
-    };
-
-    // Helper function to format date in Edmonton timezone as YYYY-MM-DD
+    // Convert the instant once so logging around midnight uses the correct leg.
     const formatEdmontonDate = (date) => {
-      const d = new Date(date.toLocaleString('en-US', { timeZone: 'America/Edmonton' }));
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Edmonton', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).formatToParts(date);
+      const part = (type) => parts.find((item) => item.type === type).value;
+      return `${part('year')}-${part('month')}-${part('day')}`;
     };
 
     const START_POSITION = { y: 660 };
     const COLD_LAKE_POSITION = { x: 446, y: 347 };
-    const daysSinceStart = Math.max(0, Math.floor((getEdmontonDate().getTime() - START_DATE.getTime()) / (1000 * 60 * 60 * 24)));
+    const MAP_HEIGHT = 620;
 
     const el = (selector) => document.querySelector(selector);
     const getRunSignature = (run) => `${run.runner}|${run.distance}|${run.date}`;
     const xPositions = { Nicolas: 385, Samuel: 420 };
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
     const easeInOut = (t) => t * t * (3 - 2 * t);
-    const getRunnerPosition = (runner, distance) => {
-      const progress = clamp(distance / TOTAL_DISTANCE, 0, 1);
+    const getNorthboundPosition = (runner, distance) => ({
+      x: xPositions[runner],
+      y: START_POSITION.y - clamp(distance / TOTAL_DISTANCE, 0, 1) * MAP_HEIGHT
+    });
+
+    const createRouteTotals = () => ({
+      northbound: { Nicolas: 0, Samuel: 0 },
+      coldLake: { Nicolas: 0, Samuel: 0 }
+    });
+
+    const addRunToRouteTotals = (totals, run) => {
+      const leg = run.date < COLD_LAKE_START_DATE ? 'northbound' : 'coldLake';
+      totals[leg][run.runner] += run.distance;
+    };
+
+    const getRouteTotals = () => {
+      const totals = createRouteTotals();
+      runners.forEach((runner) => runs[runner].forEach((run) => {
+        addRunToRouteTotals(totals, { ...run, runner });
+      }));
+      return totals;
+    };
+
+    const getRunnerJourney = (runner, totals) => {
+      const start = getNorthboundPosition(runner, totals.northbound[runner]);
+      // Straight-line map distance, expressed using the existing north–south scale.
+      const routeDistance = Math.hypot(COLD_LAKE_POSITION.x - start.x, COLD_LAKE_POSITION.y - start.y) * TOTAL_DISTANCE / MAP_HEIGHT;
+      const progress = routeDistance === 0 ? 1 : clamp(totals.coldLake[runner] / routeDistance, 0, 1);
       return {
-        x: xPositions[runner] + ((COLD_LAKE_POSITION.x - xPositions[runner]) * progress),
-        y: START_POSITION.y + ((COLD_LAKE_POSITION.y - START_POSITION.y) * progress)
+        position: {
+          x: start.x + (COLD_LAKE_POSITION.x - start.x) * progress,
+          y: start.y + (COLD_LAKE_POSITION.y - start.y) * progress
+        },
+        remaining: Math.max(routeDistance - totals.coldLake[runner], 0),
+        progress,
+        routeDistance
       };
     };
 
     const getTotals = () => ({
       Nicolas: runs.Nicolas.reduce((sum, run) => sum + run.distance, 0),
       Samuel: runs.Samuel.reduce((sum, run) => sum + run.distance, 0)
-    });
-
-    const getRemainingDistances = (totals) => ({
-      Nicolas: Math.max(TOTAL_DISTANCE - totals.Nicolas, 0),
-      Samuel: Math.max(TOTAL_DISTANCE - totals.Samuel, 0)
     });
 
     const buildDailyTimeline = () => {
@@ -336,14 +359,13 @@
         dailyTotals.get(run.date)[run.runner] += run.distance;
       });
 
-      const cumulative = { Nicolas: 0, Samuel: 0 };
+      const cumulative = createRouteTotals();
       return [...dailyTotals.keys()].sort((a, b) => new Date(a) - new Date(b)).map((date) => {
         const dayTotals = dailyTotals.get(date);
-        cumulative.Nicolas += dayTotals.Nicolas;
-        cumulative.Samuel += dayTotals.Samuel;
+        runners.forEach((runner) => addRunToRouteTotals(cumulative, { runner, date, distance: dayTotals[runner] }));
         return {
           date,
-          totals: { ...cumulative }
+          totals: { northbound: { ...cumulative.northbound }, coldLake: { ...cumulative.coldLake } }
         };
       });
     };
@@ -354,8 +376,8 @@
     };
 
     const renderRunnerMarkers = (totals) => {
-      const markers = runners.filter((runner) => totals[runner] > 0).map((runner) => {
-        const { x, y } = getRunnerPosition(runner, totals[runner]);
+      const markers = runners.filter((runner) => totals.northbound[runner] + totals.coldLake[runner] > 0).map((runner) => {
+        const { x, y } = getRunnerJourney(runner, totals).position;
         return `
           <g>
             <circle cx="${x}" cy="${y}" r="14" fill="${runnerColors[runner].main}" opacity="0.25" filter="url(#runnerGlow)"></circle>
@@ -381,7 +403,7 @@
       }
       isAnimatingTimeline = false;
       updateAnimationStatus('Live view');
-      renderRunnerMarkers(getTotals());
+      renderRunnerMarkers(getRouteTotals());
       updateTimelineButtonState();
     };
 
@@ -393,7 +415,7 @@
       updateTimelineButtonState();
 
       const segmentDurationMs = 900;
-      const startTotals = { Nicolas: 0, Samuel: 0 };
+      const startTotals = createRouteTotals();
 
       const animateSegment = (segmentIndex) => {
         if (segmentIndex >= timeline.length) {
@@ -411,13 +433,13 @@
           const rawProgress = clamp((now - segmentStart) / segmentDurationMs, 0, 1);
           const easedProgress = easeInOut(rawProgress);
 
-          const interpolatedTotals = {
-            Nicolas: from.Nicolas + ((to.Nicolas - from.Nicolas) * easedProgress),
-            Samuel: from.Samuel + ((to.Samuel - from.Samuel) * easedProgress)
-          };
+          const interpolatedTotals = createRouteTotals();
+          ['northbound', 'coldLake'].forEach((leg) => runners.forEach((runner) => {
+            interpolatedTotals[leg][runner] = from[leg][runner] + (to[leg][runner] - from[leg][runner]) * easedProgress;
+          }));
 
           renderRunnerMarkers(interpolatedTotals);
-          updateAnimationStatus(`Day: ${dayText}`);
+          updateAnimationStatus(`Day: ${dayText} • ${dayText < COLD_LAKE_START_DATE ? 'Northbound' : 'Toward Cold Lake'}`);
 
           if (rawProgress < 1) {
             activeAnimationFrameId = requestAnimationFrame(step);
@@ -459,7 +481,7 @@
       const distance = parseFloat(value);
       if (!distance || distance <= 0) return false;
 
-      const run = { distance, date: formatEdmontonDate(getEdmontonDate()), runner };
+      const run = { distance, date: formatEdmontonDate(new Date()), runner };
       localRunSignatures.add(getRunSignature(run));
       db.collection('runs').add({
         runner: run.runner,
@@ -485,23 +507,26 @@
 
     const updateProgress = () => {
       const totals = getTotals();
-      const remainingDistances = getRemainingDistances(totals);
+      const routeTotals = getRouteTotals();
 
       const runnerCards = runners.map((runner) => {
-        const pct = Math.min((totals[runner] / TOTAL_DISTANCE) * 100, 100);
+        const journey = getRunnerJourney(runner, routeTotals);
+        const pct = journey.progress * 100;
         return `
           <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg text-center border border-slate-700">
             <div class="text-sm text-gray-400 font-medium">${runner}</div>
-            <div class="text-xl font-bold" style="color:${runnerColors[runner].main}">${remainingDistances[runner].toFixed(1)} km</div>
+            <div class="text-xl font-bold" style="color:${runnerColors[runner].main}">${journey.remaining.toFixed(1)} km left</div>
             <div class="w-full bg-slate-700 rounded-full h-2 mt-2">
               <div class="h-2 rounded-full transition-all" style="width:${pct}%;background:${runnerColors[runner].main};box-shadow:0 0 8px ${runnerColors[runner].glow}"></div>
             </div>
-            <div class="text-xs text-gray-500 mt-1">${pct.toFixed(1)}% complete</div>
+            <div class="text-xs text-gray-400 mt-1">${journey.remaining === 0 ? 'Arrived at Cold Lake!' : `${pct.toFixed(1)}% to Cold Lake`}</div>
+            <div class="text-xs text-gray-400 mt-1">Total run: ${totals[runner].toFixed(1)} km</div>
           </div>`;
       }).join('');
       el('#runnerCards').innerHTML = runnerCards;
 
       const progressBlocks = runners.map((runner) => {
+        const journey = getRunnerJourney(runner, routeTotals);
         return `
           <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg border border-slate-700">
             <div class="flex items-center justify-between mb-1">
@@ -509,15 +534,15 @@
                 <div class="w-5 h-5 rounded-full flex items-center justify-center font-bold text-xs" style="background:${runnerColors[runner].main};color:#1e293b">${runner[0]}</div>
                 <span class="font-semibold text-gray-300">${runner}</span>
               </div>
-              <span class="text-lg font-bold" style="color:${runnerColors[runner].main}">${remainingDistances[runner].toFixed(1)} km</span>
+              <span class="text-lg font-bold" style="color:${runnerColors[runner].main}">${journey.remaining.toFixed(1)} km</span>
             </div>
-            <div class="text-xs text-gray-500">Distance left to Cold Lake</div>
+            <div class="text-xs text-gray-400">${journey.remaining === 0 ? 'Arrived at Cold Lake!' : 'Distance left to Cold Lake'} • ${routeTotals.coldLake[runner].toFixed(1)} km run since October 29</div>
           </div>`;
       }).join('');
       el('#runnerProgress').innerHTML = progressBlocks;
 
       if (!isAnimatingTimeline) {
-        renderRunnerMarkers(totals);
+        renderRunnerMarkers(routeTotals);
       }
 
       const history = sortHistory(runs);
