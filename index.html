@@ -295,7 +295,8 @@
       return `${year}-${month}-${day}`;
     };
 
-    const getYPosition = (distance) => 660 - ((distance / TOTAL_DISTANCE) * 620); // 0km at southern border (y=660), 1200km at northern border (y=40)
+    const START_POSITION = { y: 660 };
+    const COLD_LAKE_POSITION = { x: 446, y: 347 };
     const daysSinceStart = Math.max(0, Math.floor((getEdmontonDate().getTime() - START_DATE.getTime()) / (1000 * 60 * 60 * 24)));
 
     const el = (selector) => document.querySelector(selector);
@@ -303,6 +304,13 @@
     const xPositions = { Nicolas: 385, Samuel: 420 };
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
     const easeInOut = (t) => t * t * (3 - 2 * t);
+    const getRunnerPosition = (runner, distance) => {
+      const progress = clamp(distance / TOTAL_DISTANCE, 0, 1);
+      return {
+        x: xPositions[runner] + ((COLD_LAKE_POSITION.x - xPositions[runner]) * progress),
+        y: START_POSITION.y + ((COLD_LAKE_POSITION.y - START_POSITION.y) * progress)
+      };
+    };
 
     const getTotals = () => ({
       Nicolas: runs.Nicolas.reduce((sum, run) => sum + run.distance, 0),
@@ -342,8 +350,7 @@
 
     const renderRunnerMarkers = (totals) => {
       const markers = runners.filter((runner) => totals[runner] > 0).map((runner) => {
-        const x = xPositions[runner];
-        const y = getYPosition(totals[runner]);
+        const { x, y } = getRunnerPosition(runner, totals[runner]);
         return `
           <g>
             <circle cx="${x}" cy="${y}" r="14" fill="${runnerColors[runner].main}" opacity="0.25" filter="url(#runnerGlow)"></circle>
