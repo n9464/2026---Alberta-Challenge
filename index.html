@@ -176,7 +176,7 @@
 
         <!-- Runner cards -->
         <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-6 border border-slate-700">
-          <h3 class="font-bold text-lg mb-4 text-white">Individual Totals</h3>
+          <h3 class="font-bold text-lg mb-4 text-white">Distance Remaining</h3>
           <div class="grid grid-cols-1 gap-3" id="runnerCards"></div>
         </div>
       </div>
@@ -315,6 +315,11 @@
     const getTotals = () => ({
       Nicolas: runs.Nicolas.reduce((sum, run) => sum + run.distance, 0),
       Samuel: runs.Samuel.reduce((sum, run) => sum + run.distance, 0)
+    });
+
+    const getRemainingDistances = (totals) => ({
+      Nicolas: Math.max(TOTAL_DISTANCE - totals.Nicolas, 0),
+      Samuel: Math.max(TOTAL_DISTANCE - totals.Samuel, 0)
     });
 
     const buildDailyTimeline = () => {
@@ -480,23 +485,23 @@
 
     const updateProgress = () => {
       const totals = getTotals();
+      const remainingDistances = getRemainingDistances(totals);
 
       const runnerCards = runners.map((runner) => {
         const pct = Math.min((totals[runner] / TOTAL_DISTANCE) * 100, 100);
         return `
           <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg text-center border border-slate-700">
             <div class="text-sm text-gray-400 font-medium">${runner}</div>
-            <div class="text-xl font-bold" style="color:${runnerColors[runner].main}">${totals[runner].toFixed(1)} km</div>
+            <div class="text-xl font-bold" style="color:${runnerColors[runner].main}">${remainingDistances[runner].toFixed(1)} km</div>
             <div class="w-full bg-slate-700 rounded-full h-2 mt-2">
               <div class="h-2 rounded-full transition-all" style="width:${pct}%;background:${runnerColors[runner].main};box-shadow:0 0 8px ${runnerColors[runner].glow}"></div>
             </div>
-            <div class="text-xs text-gray-500 mt-1">${pct.toFixed(1)}%</div>
+            <div class="text-xs text-gray-500 mt-1">${pct.toFixed(1)}% complete</div>
           </div>`;
       }).join('');
       el('#runnerCards').innerHTML = runnerCards;
 
       const progressBlocks = runners.map((runner) => {
-        const remaining = Math.max(TOTAL_DISTANCE - totals[runner], 0);
         return `
           <div class="p-3 bg-gradient-to-br ${runnerColors[runner].light} rounded-lg border border-slate-700">
             <div class="flex items-center justify-between mb-1">
@@ -504,9 +509,9 @@
                 <div class="w-5 h-5 rounded-full flex items-center justify-center font-bold text-xs" style="background:${runnerColors[runner].main};color:#1e293b">${runner[0]}</div>
                 <span class="font-semibold text-gray-300">${runner}</span>
               </div>
-              <span class="text-lg font-bold" style="color:${runnerColors[runner].main}">${totals[runner].toFixed(1)} km</span>
+              <span class="text-lg font-bold" style="color:${runnerColors[runner].main}">${remainingDistances[runner].toFixed(1)} km</span>
             </div>
-            <div class="text-xs text-gray-500">Remaining: ${remaining.toFixed(1)} km</div>
+            <div class="text-xs text-gray-500">Distance left to Cold Lake</div>
           </div>`;
       }).join('');
       el('#runnerProgress').innerHTML = progressBlocks;
